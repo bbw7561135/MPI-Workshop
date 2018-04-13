@@ -2,7 +2,7 @@
 
 Textbook: Using MPI *Portable Parallel Programming with the Message-Passing Interface*: William Gropp, Ewing Lusk, etc
 
-MPI is a libary of function calls. It is not a language and there is no such thing as an MPI compiler. MPI's prime goals are to provide source-code portability and to allow efficient implementation. It also offers a great deal of functionaility and support for heterogenous parallel architectures.
+MPI is a library of function calls. It is not a language and there is no such thing as an MPI compiler. MPI's prime goals are to provide source-code portability and to allow efficient implementation. It also offers a great deal of functionality and support for heterogenous parallel architectures.
 
 ## MPI basics
 
@@ -69,7 +69,7 @@ END PROGRAM my_mpi_program
 
 ### Rank
 
-We use the function `MPI_COMM_RANK` to identify the different proccesses. This is known as the rank and is not the physical processor number. It is a logical number which goes from 0, ..., N-1.
+We use the function `MPI_COMM_RANK` to identify the different processes. This is known as the rank and is not the physical processor number. It is a logical number which goes from 0, ..., N-1.
 
 ```c
 MPI_Comm_rank(MPI_Comm comm, int *rank)
@@ -102,7 +102,7 @@ int MPI_Finalize();
 MPI_FINALIZE(IERROR)
 ```
 
-We can also abort MPI, but this is not reccommended.
+We can also abort MPI, but this is not recommended.
 
 ### Machine names
 
@@ -194,7 +194,7 @@ if (rank == 3)
 }
 ```
 
-Recieving a scalar:
+Receiving a scalar:
 
 ```c
 int y;
@@ -208,11 +208,11 @@ if (rank == 3)
 
 ### Synchronous blocking message passing
 
-Processes synchronise. Sending process specifies the synchronous mode. If blocking, both processes wait until the transfer has completed. For a communication to succeed, the sender must specify a vaid destination and then receiver must specificy a valid source rank. The communicator and tags must match and the receiver's buffer must be large enough.
+Processes synchronise. Sending process specifies the synchronous mode. If blocking, both processes wait until the transfer has completed. For a communication to succeed, the sender must specify a valid destination and then receiver must specify a valid source rank. The communicator and tags must match and the receiver's buffer must be large enough.
 
 ### Wildcarding
 
-The receiver can wildcard. To receieve from any source use `MPI_ANY_SOURCE` and to receieve from any tag use `MPI_ANY_TAG`. The actual source and tag will be returned in receiver's status parameter.
+The receiver can wildcard. To receive from any source use `MPI_ANY_SOURCE` and to receive from any tag use `MPI_ANY_TAG`. The actual source and tag will be returned in receiver's status parameter.
 
 ### Received message count
 
@@ -239,7 +239,7 @@ For `Bsend`, the user has to provide a single large block of memory. This is mad
 
 ### MPI_Send
 
-`MPI_Send` tries to solve the problems with `MPI_Ssend` and `MPI_Bsend`. Buffer space is provided by the system. `Send` will normaly be asynchronous, like `Bsend`, but if the message is too big for the buffer, i.e. if it is full, then `Send` becomes synchronous, like `Ssend`. `MPI_Send` is unlikely to fail, but can cause deadlocks in your program.
+`MPI_Send` tries to solve the problems with `MPI_Ssend` and `MPI_Bsend`. Buffer space is provided by the system. `Send` will normally be asynchronous, like `Bsend`, but if the message is too big for the buffer, i.e. if it is full, then `Send` becomes synchronous, like `Ssend`. `MPI_Send` is unlikely to fail, but can cause deadlocks in your program.
 
 ### Checking for messages
 
@@ -249,7 +249,7 @@ MPI allows us to check if any messages have arrived. You can 'probe' for matchin
 int MPI_Probe(int source, int tag, MPI_Comm comm, MPI_Status, *status);
 ```
 
-Status is set as if the receive took place, e.g. you can find out the size of the mssage and allocate space prior to receive. We have to be careful with wildcards. We can use `MPI_ANY_SOURCE` in the call to probe, but we must use specific source in receive to guarantee matching the same message.
+Status is set as if the receive took place, e.g. you can find out the size of the message and allocate space prior to receive. We have to be careful with wildcards. We can use `MPI_ANY_SOURCE` in the call to probe, but we must use specific source in receive to guarantee matching the same message.
 
 ```c
 MPI_Recv(buff, count, datatype, status.MPI_SOURCE, ...)
@@ -271,14 +271,14 @@ This mode of operation determines when its operations are completed. This determ
 
 ### Non-blocking operations
 
-Non-blocking operations retrusn straight away and allow the sub-program to continue to perform other work. At some later time the sub-program can test or wait for the completion of the non-blocking operation.
+Non-blocking operations returns straight away and allow the sub-program to continue to perform other work. At some later time the sub-program can test or wait for the completion of the non-blocking operation.
 
 All non-blocking operations should have matching wait operations. Some systems cannot free resources until wait has been called. **A non-blocking operation immediately followed by a matching wait is the same as a blocking operation.**
 
 Separate communication into three phases:
 
 * Initiate non-blocking communication.
-* Do some work (could invovle other communication).
+* Do some work (could involve other communication).
 * Wait for non-blocking communication to complete.
 
 ### Non-blocking synchronous send
@@ -323,7 +323,7 @@ else if (rank == 1)
 
 ### Multiple communications
 
-* Test or wait for completetion of one message.
+* Test or wait for completion of one message.
 * Test or wait for completion of all messages.
 * Test or wait for completion of as many messages as possible.
 
@@ -339,7 +339,7 @@ int MPI_Sendrecv(void *sendbuf, int sendcount, MPI_Datatype sendtype, int dest, 
 
 ### Characteristics
 
-All processes must communicate, thus collective communications can be slow. Syncronisation may or may not occur. Standard collective operations are blocking. There are no tags and the **receive buffers must be exactly the right size.**
+All processes must communicate, thus collective communications can be slow. Synchronisation may or may not occur. Standard collective operations are blocking. There are no tags and the **receive buffers must be exactly the right size.**
 
 ### Broadcast
 
@@ -369,7 +369,7 @@ Brings everything onto one process???
 
 ### Global reduction operations
 
-Used to compute a result invovling data distributed over a group of processes.
+Used to compute a result involving data distributed over a group of processes.
 
 * global sum or product
 * global maximum or minimum
@@ -395,7 +395,7 @@ int MPI_Allreduce(void* sendbuf, void* recvbuf, int count, MPI_Datatype datatype
 
 ## Virtual Topologies
 
-Virtual toplogies provide convenient process naming with a naming scheme with fits the communication pattern. In principle it simplifies the writing of code and can allow MPI to optimise communications.
+Virtual topologies provide convenient process naming with a naming scheme with fits the communication pattern. In principle it simplifies the writing of code and can allow MPI to optimise communications.
 
 ### Topology Types
 
@@ -403,7 +403,7 @@ Virtual toplogies provide convenient process naming with a naming scheme with fi
 * Graph topologies - general graphs??? Not covered here.
 
 ```c
-int MPI_Cart_create(MPI_Comm comm_old, int ndims, int *dims, int *periods, int reorder, MPI_Comm *comm_cart)'
+int MPI_Cart_create(MPI_Comm comm_old, int ndims, int *dims, int *periods, int reorder, MPI_Comm *comm_cart)
 ```
 
 Note that this function takes in a communicator and creates a new one. If reorder is true, the ranks can be re-ordered by the hardware. In practice, it is best to use reorder as false.

@@ -4,7 +4,7 @@
 #include <mpi.h>
 
 #define MPI_DEFAULT_TAG 0
-#define N 1000
+#define N 1000000
 
 double pi_sum(int lower, int upper);
 
@@ -13,9 +13,8 @@ main(int argc, char *argv[])
 {
     MPI_Init(&argc, &argv);
 
-    int current_rank, n_ranks, process_lower, process_upper;
-    int chunksize;
-    double partial_sum, partial_sums, pi;
+    int current_rank, n_ranks, process_lower, process_upper, chunksize;
+    double partial_sum, partial_sums, pi, pi_error;
     MPI_Status recv_status;
 
     MPI_Comm_rank(MPI_COMM_WORLD, &current_rank);
@@ -34,13 +33,6 @@ main(int argc, char *argv[])
   
     partial_sum = pi_sum(process_lower, process_upper);
 
-    if (current_rank != 0)
-    {
-        // send partial pi to rank 0
-        MPI_Ssend(&partial_sum, 1, MPI_DOUBLE, 0, MPI_DEFAULT_TAG,
-                  MPI_COMM_WORLD);
-    }
-
     if (current_rank == 0)
     {
         pi = partial_sum;
@@ -54,7 +46,15 @@ main(int argc, char *argv[])
         }
 
         pi *= 4.0/N;
-        printf("pi = %f\n", pi);
+        pi_error = pi - M_PI;
+        
+        printf("Pi = %f: error = %f.\n", pi, pi_error); 
+    }
+    else
+    {
+        // send partial sum to rank 0
+        MPI_Ssend(&partial_sum, 1, MPI_DOUBLE, 0, MPI_DEFAULT_TAG,
+                  MPI_COMM_WORLD);
     }
     
     MPI_Finalize();
