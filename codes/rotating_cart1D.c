@@ -6,7 +6,6 @@
 #define FALSE 0
 
 #define MPI_DEFAULT_TAG 0
-#define MPI_DEFAULT_COMM MPI_COMM_WORLD
 
 #define NDIMS 1
 #define XDIR 0
@@ -25,7 +24,6 @@ main(int argc, char *argv[])
     int proc, n_procs;
     int data_pass, recv_data, proc_sum = 0;
     int coord_print = FALSE, reorder = 0, disp = 1;
-    int nx, ny;
 
     int coords[NDIMS];
     int dims[NDIMS];
@@ -36,10 +34,7 @@ main(int argc, char *argv[])
     MPI_Request proc_request;
     MPI_Comm cart_comm;
 
-/* -------------------------------------------------------------------------- */
-
     MPI_Init(NULL, NULL);
-
     MPI_Comm_rank(MPI_COMM_WORLD, &proc);
     MPI_Comm_size(MPI_COMM_WORLD, &n_procs);
 
@@ -47,7 +42,7 @@ main(int argc, char *argv[])
         coord_print = atoi(argv[1]);
 
     if (proc == 0)
-        printf("Number of processes: %d.\n", n_procs);
+        printf("Number of processes: %d.\n\n", n_procs);
 
     /*
      * Initialise the dims array with zeros otherwise MPI_Dims_create will
@@ -56,16 +51,16 @@ main(int argc, char *argv[])
     for (int i = 0; i < NDIMS; i++)
     {
         dims[i] = 0;
-        dim_period[i] = 1;
-
-        if (i == 1)
-            dim_period[i] = 0;
+        dim_period[i] = 0;
     }
 
     MPI_Dims_create(n_procs, NDIMS, dims);
-    MPI_Cart_create(MPI_DEFAULT_COMM, NDIMS, dims, dim_period, reorder,
+    MPI_Cart_create(MPI_COMM_WORLD, NDIMS, dims, dim_period, reorder,
         &cart_comm);
+    MPI_Comm_rank(cart_comm, &proc);
     MPI_Cart_coords(cart_comm, proc, NDIMS, coords);
+    MPI_Cart_shift(cart_comm, XDIR, disp, &nbrs[LEFT], &nbrs[RIGHT]);
+
     if (coord_print == TRUE)
         print_coords(coords, proc);
 
@@ -76,18 +71,20 @@ main(int argc, char *argv[])
 
     for (int j = 0; j < n_procs; j++)
     {
-        MPI_Cart_shift(cart_comm, XDIR, disp, &nbrs[LEFT], &nbrs[RIGHT]);
-
         MPI_Issend(&data_pass, 1, MPI_INT, nbrs[RIGHT], MPI_DEFAULT_TAG,
-                   cart_comm, &proc_request);
+                cart_comm, &proc_request);
         MPI_Recv(&recv_data, 1, MPI_INT, nbrs[LEFT], MPI_DEFAULT_TAG,
-                 cart_comm, &recv_status);
+                cart_comm, &recv_status);
         MPI_Wait(&proc_request, &recv_status);
 
         proc_sum += recv_data;
         data_pass = recv_data;
+        printf("Rank %d: nbrs[LEFT] = %d nbrs[RIGHT] = %d data_pass = %d",
+               proc, nbrs[LEFT], nbrs[RIGHT], data_pass);
+        printf("recv_data = %d proc_sum = %d\n\n",  recv_data, proc_sum);
     }
 
+    MPI_Barrier(cart_comm);
     printf("Rank %d: sum = %d.\n", proc, proc_sum);
 
     MPI_Finalize();
