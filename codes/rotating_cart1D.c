@@ -1,78 +1,108 @@
+#include <stdlib.h>
 #include <stdio.h>
 #include <mpi.h>
 
+#define TRUE 1
+#define FALSE 0
+
 #define MPI_DEFAULT_TAG 0
 #define MPI_DEFAULT_COMM MPI_COMM_WORLD
-#define DEFAULT_REORDER 0
 
 #define NDIMS 1
+#define XDIR 0
+
+#define N_NBRS 4
+#define UP 0
+#define DOWN 1
+#define LEFT 2
+#define RIGHT 3
+
+int print_coords(int *coords, int proc);
 
 int
 main(int argc, char *argv[])
 {
+    int proc, n_procs;
+    int data_pass, recv_data, proc_sum = 0;
+    int coord_print = FALSE, reorder = 0, disp = 1;
+    int nx, ny;
 
-/* -------------------------------------------------------------------------- */
-
-    int n_ranks, current_rank;
-    int data_to_send, received_data;
-    int rank_sum = 0;
-    int right_rank, left_rank;
-
-    int dims[NDIMS]; 
-    int periods[NDIMS]; 
+    int coords[NDIMS];
+    int dims[NDIMS];
+    int dim_period[NDIMS];
+    int nbrs[N_NBRS];
 
     MPI_Status recv_status;
-    MPI_Request rank_request_right, rank_request_left;
+    MPI_Request proc_request;
     MPI_Comm cart_comm;
 
 /* -------------------------------------------------------------------------- */
 
-    MPI_Init(&argc, &argv);
+    MPI_Init(NULL, NULL);
 
-    MPI_Comm_rank(MPI_COMM_WORLD, &current_rank);
-    MPI_Comm_size(MPI_COMM_WORLD, &n_ranks);
+    MPI_Comm_rank(MPI_COMM_WORLD, &proc);
+    MPI_Comm_size(MPI_COMM_WORLD, &n_procs);
 
-    if (current_rank == 0)
-        printf("Number of processes: %d.\n", n_ranks);
-    
-    // calculate the dimensions to use for the cart grid
-    // set all of dims to be 0
+    if (argc != 1)
+        coord_print = atoi(argv[1]);
+
+    if (proc == 0)
+        printf("Number of processes: %d.\n", n_procs);
+
+    /*
+     * Initialise the dims array with zeros otherwise MPI_Dims_create will
+     * possibly fail when receiving garabge from memory
+     */
     for (int i = 0; i < NDIMS; i++)
     {
         dims[i] = 0;
-    }
-    
-    periods[0] = 1;  // periodic boundary
+        dim_period[i] = 1;
 
-    MPI_Dims_create(n_ranks, NDIMS, dims);
-    MPI_Cart_create(MPI_DEFAULT_COMM, NDIMS, dims, periods, DEFAULT_REORDER,
-                    &cart_comm);
-    
-    // initialise the start of the sum
-    data_to_send = current_rank; 
-    for (int rank = 0; rank < n_ranks; rank++)
+        if (i == 1)
+            dim_period[i] = 0;
+    }
+
+    MPI_Dims_create(n_procs, NDIMS, dims);
+    MPI_Cart_create(MPI_DEFAULT_COMM, NDIMS, dims, dim_period, reorder,
+        &cart_comm);
+    MPI_Cart_coords(cart_comm, proc, NDIMS, coords);
+    if (coord_print == TRUE)
+        print_coords(coords, proc);
+
+    /*
+     * Set the value for each process which will be passed around
+     */
+    data_pass = proc;
+
+    for (int j = 0; j < n_procs; j++)
     {
-        MPI_Cart_shift(cart_comm, 0, 1, &current_rank, &right_rank);
-        MPI_Cart_shift(cart_comm, 0, -1, &current_rank, &left_rank);
-        
-        // send (to right) and receive (to left) -- non-blocking 
-        MPI_Issend(&data_to_send, 1, MPI_INT, right_rank, MPI_DEFAULT_TAG,
-                   cart_comm, &rank_request_right); 
-        MPI_Irecv(&received_data, 1, MPI_INT, left_rank, MPI_DEFAULT_TAG,
-                  cart_comm, &rank_request_left);
+        MPI_Cart_shift(cart_comm, XDIR, disp, &nbrs[LEFT], &nbrs[RIGHT]);
 
-        // stop the non-blocking send and receives
-        MPI_Wait(&rank_request_right, &recv_status);
-        MPI_Wait(&rank_request_left, &recv_status);
+        MPI_Issend(&data_pass, 1, MPI_INT, nbrs[RIGHT], MPI_DEFAULT_TAG,
+                   cart_comm, &proc_request);
+        MPI_Recv(&recv_data, 1, MPI_INT, nbrs[LEFT], MPI_DEFAULT_TAG,
+                 cart_comm, &recv_status);
+        MPI_Wait(&proc_request, &recv_status);
 
-        // sum everything up
-        rank_sum += received_data;
-        data_to_send = received_data;
+        proc_sum += recv_data;
+        data_pass = recv_data;
     }
 
-    printf("Rank %d: sum = %d.\n", current_rank, rank_sum);
+    printf("Rank %d: sum = %d.\n", proc, proc_sum);
 
     MPI_Finalize();
     return 0;
 }
-        
+
+int
+print_coords(int *coords, int proc)
+{
+    printf("Rank %d: coords: (", proc);
+    for (int k = 0; k < NDIMS; k++)
+    {
+        printf(" %d ", coords[k]);
+    }
+    printf(")\n");
+
+    return 0;
+}
