@@ -6,6 +6,7 @@
 #define FALSE 0
 
 #define MPI_DEFAULT_TAG 0
+#define DEFAULT_COMM MPI_COMM_WORLD
 
 #define NDIMS 1
 #define XDIR 0
@@ -24,6 +25,7 @@ main(int argc, char *argv[])
     int proc, n_procs;
     int data_pass, recv_data, proc_sum = 0;
     int coord_print = FALSE, reorder = 0, disp = 1;
+    int nx, ny;
 
     int coords[NDIMS];
     int dims[NDIMS];
@@ -41,8 +43,9 @@ main(int argc, char *argv[])
     if (argc != 1)
         coord_print = atoi(argv[1]);
 
+
     if (proc == 0)
-        printf("Number of processes: %d.\n\n", n_procs);
+        printf("Number of processes: %d.\n", n_procs);
 
     /*
      * Initialise the dims array with zeros otherwise MPI_Dims_create will
@@ -51,16 +54,13 @@ main(int argc, char *argv[])
     for (int i = 0; i < NDIMS; i++)
     {
         dims[i] = 0;
-        dim_period[i] = 0;
+        dim_period[i] = 1;
     }
 
     MPI_Dims_create(n_procs, NDIMS, dims);
-    MPI_Cart_create(MPI_COMM_WORLD, NDIMS, dims, dim_period, reorder,
+    MPI_Cart_create(DEFAULT_COMM, NDIMS, dims, dim_period, reorder,
         &cart_comm);
-    MPI_Comm_rank(cart_comm, &proc);
     MPI_Cart_coords(cart_comm, proc, NDIMS, coords);
-    MPI_Cart_shift(cart_comm, XDIR, disp, &nbrs[LEFT], &nbrs[RIGHT]);
-
     if (coord_print == TRUE)
         print_coords(coords, proc);
 
@@ -68,6 +68,8 @@ main(int argc, char *argv[])
      * Set the value for each process which will be passed around
      */
     data_pass = proc;
+
+    MPI_Cart_shift(cart_comm, XDIR, disp, &nbrs[LEFT], &nbrs[RIGHT]);
 
     for (int j = 0; j < n_procs; j++)
     {
@@ -80,7 +82,7 @@ main(int argc, char *argv[])
         proc_sum += recv_data;
         data_pass = recv_data;
         printf("Rank %d: nbrs[LEFT] = %d nbrs[RIGHT] = %d data_pass = %d",
-               proc, nbrs[LEFT], nbrs[RIGHT], data_pass);
+            proc, nbrs[LEFT], nbrs[RIGHT], data_pass);
         printf("recv_data = %d proc_sum = %d\n\n",  recv_data, proc_sum);
     }
 

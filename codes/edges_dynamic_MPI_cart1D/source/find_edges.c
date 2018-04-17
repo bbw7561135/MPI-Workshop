@@ -13,17 +13,12 @@ main(int argc, char *argv[])
     int nx, ny, nx_proc, ny_proc;
     int *dims, *dim_period, *nbrs;
 
-    int reorder = 0, disp = 1;
-
     double **buff, **master_buff;
     double **old, **new, **edge;
 
-    MPI_Status recv_status;
     MPI_Comm cart_comm;
-
-    MPI_Init(NULL, NULL);
-    MPI_Comm_rank(DEFAULT_COMM, &proc);
-    MPI_Comm_size(DEFAULT_COMM, &n_procs);
+    MPI_Status recv_status;
+    MPI_Request proc_request;
 
     if (argc != 3)
     {
@@ -32,46 +27,17 @@ main(int argc, char *argv[])
         exit(-1);
     }
 
+    MPI_Init(NULL, NULL);
+    MPI_Comm_rank(DEFAULT_COMM, &proc);
+    MPI_Comm_size(DEFAULT_COMM, &n_procs);
+
+    /*
+     * Read in the filename and get the dimensions
+     */
     char *filename = argv[1];
     int n_iters = atoi(argv[2]);
     pgmsize(filename, &nx, &ny);
-
-    /*
-     * Calculate the boundaries for each process
-     */
-    dims = malloc(sizeof(*dims) * NDIMS);
-    dim_period = malloc(sizeof(*dim_period) * NDIMS);
-
-    /*
-     * Initialise dims as being 0 otherwise MPI_Dims_create will likely return
-     * garbage. Also set all of the directions to be non-periodic
-     */
-    for (i = 0; i < NDIMS; i++)
-    {
-        dims[i] = 0;
-        dim_period[i] = 0;
-    }
-
-    MPI_Dims_create(n_procs, NDIMS, dims);
-    MPI_Cart_create(DEFAULT_COMM, NDIMS, dims, dim_period, reorder, &cart_comm);
-    nx_proc = (int) ceil((double) nx/dims[0]);
-    //ny_proc = (int) ceil((double) ny/dims[1]);
-    ny_proc = ny;
-
-    printf("dims[0] %d dims[1] %d nx_proc %d ny_proc %d\n", dims[0], dims[1],
-           nx_proc, ny_proc);
-
-    /*
-     * You're a constant source of disappointment, Jack
-     * Allocate memory for all of the arrays -- use arralloc because it keeps
-     * array elements contiguous
-     */
-    buff = arralloc(sizeof(*buff), 2, nx_proc, ny_proc);
     master_buff = arralloc(sizeof(*master_buff), 2, nx, ny);
-
-    old = arralloc(sizeof(*old), 2, nx_proc+2, ny_proc+2);
-    new = arralloc(sizeof(*new), 2, nx_proc+2, ny_proc+2);
-    edge = arralloc(sizeof(*edge), 2, nx_proc+2, ny_proc+2);
 
     if (proc == MASTER_PROCESS)
     {
@@ -81,6 +47,41 @@ main(int argc, char *argv[])
             filename, nx, ny, n_iters, n_procs);
         printf("----------------------\n\n");
     }
+
+    /*
+     * Calculate the boundaries for each process.
+     * dims is initialised as being 0 otherwise MPI_Dims_create will likely
+     * return garbage. The directions are non-periodic. Create a cartersian
+     * topology and find the neighbouring processes using MPI_Cart_shift.
+     */
+    int reorder = 0, disp = 1;
+    nbrs = malloc(sizeof(*nbrs) * N_NBRS);
+    dims = malloc(sizeof(*dims) * NDIMS);
+    dim_period = malloc(sizeof(*dim_period) * NDIMS);
+
+    for (i = 0; i < NDIMS; i++)
+    {
+        dims[i] = 0;
+        dim_period[i] = 0;
+    }
+
+    MPI_Dims_create(n_procs, NDIMS, dims);
+    MPI_Cart_create(DEFAULT_COMM, NDIMS, dims, dim_period, reorder, &cart_comm);
+    MPI_Comm_rank(cart_comm, &proc);
+    MPI_Cart_shift(cart_comm, XDIR, disp, &nbrs[LEFT], &nbrs[RIGHT]);
+
+    nx_proc = (int) ceil((double) nx/dims[0]);
+    ny_proc = ny;
+
+    /*
+     * You're a constant source of disappointment, Jack
+     * Allocate memory for all of the arrays -- use arralloc because it keeps
+     * array elements contiguous
+     */
+    buff = arralloc(sizeof(*buff), 2, nx_proc, ny_proc);
+    old = arralloc(sizeof(*old), 2, nx_proc+2, ny_proc+2);
+    new = arralloc(sizeof(*new), 2, nx_proc+2, ny_proc+2);
+    edge = arralloc(sizeof(*edge), 2, nx_proc+2, ny_proc+2);
 
     /*
      * Use MPI_Scatter to scatter the work across all of the processes
@@ -112,22 +113,23 @@ main(int argc, char *argv[])
     if (proc == MASTER_PROCESS)
         printf("\n---- BEGINNING ITERATIONS ----\n\n");
 
-    /*
-     * Find the neighbouring processes using MPI_Cart_shift
-     */
-    nbrs = malloc(sizeof(*nbrs) * N_NBRS);
-    MPI_Cart_shift(cart_comm, XDIR, disp, &nbrs[LEFT], &nbrs[RIGHT]);
-
     for (iter = 1; iter <= n_iters; iter++)
     {
+        /*
+         * Send and recieve halo cells data from left and right
+         * neighbouring processes
+         */
+        MPI_Issend(&old[nx_proc][1], ny_proc, MPI_DOUBLE, nbrs[RIGHT],
+                   DEFAULT_TAG, cart_comm, &proc_request);
+        MPI_Recv(&old[0][1], ny_proc, MPI_DOUBLE, nbrs[LEFT], DEFAULT_TAG,
+                 cart_comm, &recv_status);
+        MPI_Wait(&proc_request, &recv_status);
 
-        MPI_Sendrecv(&old[nx_proc][1], ny_proc, MPI_DOUBLE, nbrs[RIGHT], 1,
-                     &old[0][1], ny_proc, MPI_DOUBLE, nbrs[LEFT], 1,
-                     cart_comm, &recv_status);
-
-        MPI_Sendrecv(&old[1][1], ny_proc, MPI_DOUBLE, nbrs[LEFT], 2,
-                     &old[nx_proc+1][1], ny_proc, MPI_DOUBLE, nbrs[RIGHT], 2,
-                     cart_comm, &recv_status);
+        MPI_Issend(&old[1][1], ny_proc, MPI_DOUBLE, nbrs[LEFT],
+                   DEFAULT_TAG, cart_comm, &proc_request);
+        MPI_Recv(&old[nx_proc+1][1], ny_proc, MPI_DOUBLE, nbrs[RIGHT],
+                 DEFAULT_TAG, cart_comm, &recv_status);
+        MPI_Wait(&proc_request, &recv_status);
 
         for (i = 1; i < nx_proc+1; i++)
         {
@@ -146,8 +148,8 @@ main(int argc, char *argv[])
             }
         }
 
-        if (proc == MASTER_PROCESS)
-            if (iter % 100 == 0)
+        if (iter % FREQ == 0)
+            if (proc == MASTER_PROCESS)
                 printf("%d iterations complete.\n", iter);
     }
 
@@ -162,11 +164,21 @@ main(int argc, char *argv[])
         }
     }
 
+    free(dims);
+    free(dim_period);
+    free(nbrs);
+    free(old);
+    free(new);
+    free(edge);
+
     /*
      * Gather the processes buff and send them to the root
      */
     MPI_Gather(&buff[0][0], nx_proc*ny_proc, MPI_DOUBLE, &master_buff[0][0],
                nx_proc*ny_proc, MPI_DOUBLE, MASTER_PROCESS, cart_comm);
+    MPI_Finalize();
+
+    free(buff);
 
     if (proc == MASTER_PROCESS)
     {
@@ -174,16 +186,7 @@ main(int argc, char *argv[])
         pgmwrite(out_filename, &master_buff[0][0], nx, ny);
     }
 
-    free(dims);
-    free(dim_period);
-    free(nbrs);
-    free(buff);
     free(master_buff);
-    free(old);
-    free(new);
-    free(edge);
-
-    MPI_Finalize();
 
     return 0;
 }
