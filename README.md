@@ -463,3 +463,7 @@ By using contiguous, we may be making the program more readable, for example it 
 ### Vector type
 
 A vector type corresponds to a subsection of a 2D array. In C, we have to use statically allocated arrays because dynamically allocated arrays have no defined storage format.
+
+## Acknowledgements 
+
+I would like to acknowledge financial support from the EPSRC Centre for Doctoral Training in Next Generation Computational Modelleing grant EP/L015382/1.
